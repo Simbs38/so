@@ -27,8 +27,8 @@ then
 else
 
 mkdir /home/$USER/.Backup
-mkdir /home/$USER/.Backup/.metadata
-mkdir /home/$USER/.Backup/.data
+mkdir /home/$USER/.Backup/metadata
+mkdir /home/$USER/.Backup/data
 fi
 clear
 echo ""

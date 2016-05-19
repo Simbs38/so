@@ -2,13 +2,16 @@ CC=gcc
 
 CFLAGS=-Wall -Wno-unused-result -O2 -ansi
 
+
 all: srv cli
 
+both: srv cli kill
+
 srv:
-	$(CC) $(CFLAGS) -o sobusrv src/sobusrv.c
+	$(CC) $(CFLAGS) -o sobusrv src/sobusrv.c src/dest.c
 
 cli:
-	$(CC) $(CFLAGS) -o sobucli src/sobucli.c 
+	$(CC) $(CFLAGS) -o sobucli src/sobucli.c src/dest.c
 
 
 clean:
@@ -22,3 +25,7 @@ install: all
 uninstall:
 	chmod a+x uninstall.sh
 	./uninstall.sh
+
+kill:
+	kill sobusrv
+	kill sobucli
