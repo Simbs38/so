@@ -1,6 +1,6 @@
 CC=gcc
 
-CFLAGS=-Wall -Wno-unused-result -O2 -ansi
+CFLAGS=-Wall -Wno-unused-result -O2
 
 
 all: srv cli
