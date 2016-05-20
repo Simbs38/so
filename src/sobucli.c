@@ -111,13 +111,16 @@ void backup(int argc, char *argv[],Fich f,int p){
     
     signal(SIGUSR1, continua);
     pause();
+
     pipeToServidor=open(f->pipe_cli_server,O_WRONLY);
     file=open(f->nome,O_RDONLY);
     rd=1; wr=1;
+
     while(rd && wr){
         rd=read(file,buffer,BUFF);
-        if(!rd) wr=write(pipeToServidor,"acabou_o_ficheiro_volte_sempre\0",31);
-        else{wr=write(pipeToServidor,buffer,rd);}
+            if(!rd) wr=write(pipeToServidor,"acabou_o_ficheiro_volte_sempre\0",31);
+            else{wr=write(pipeToServidor,buffer,rd);}
+            }
     }
     signal(SIGUSR1,backup_done);
     pause();
@@ -125,7 +128,6 @@ void backup(int argc, char *argv[],Fich f,int p){
     close(pipeToServidor);
     close(file);
 
-    }
 }
 
 void restore(int argc, char *argv[],Fich f,int p){
@@ -140,9 +142,9 @@ void restore(int argc, char *argv[],Fich f,int p){
 
         signal(SIGUSR1, continua);
         pause();
-
+        printf("Pipe: %s\n",f->pipe_server_cli );
         pipeFromServidor=open(f->pipe_server_cli,O_RDONLY);
-        file=open(f->nome,O_WRONLY | O_RDONLY | O_CREAT, 0666);
+        file=open("d.txt",O_WRONLY | O_RDONLY | O_CREAT, 0666);
         rd=1;wr=1;
         while(rd && wr){
             rd=read(pipeFromServidor,buffer,BUFF);
@@ -150,7 +152,7 @@ void restore(int argc, char *argv[],Fich f,int p){
             else wr=write(file,buffer,BUFF);
         }
 
-        printf("%s: restaurado\n",f->nome );
+        printf("%s: restaurado\n","d.txt" );
 
     }
 

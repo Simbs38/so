@@ -1,6 +1,6 @@
 CC=gcc
 
-CFLAGS=-Wall -Wno-unused-result -O2
+CFLAGS=-Wall -Wno-unused-result 
 
 
 all: srv cli
@@ -8,10 +8,10 @@ all: srv cli
 both: srv cli kill
 
 srv:
-	$(CC) $(CFLAGS) -o sobusrv src/sobusrv.c src/dest.c
+	$(CC) $(CFLAGS) -g -o sobusrv src/sobusrv.c src/dest.c
 
 cli:
-	$(CC) $(CFLAGS) -o sobucli src/sobucli.c src/dest.c
+	$(CC) $(CFLAGS) -g -o sobucli src/sobucli.c src/dest.c
 
 
 clean:

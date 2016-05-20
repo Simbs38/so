@@ -33,15 +33,17 @@ void restore(Fich f){
     if(!fork()){
         mkfifo(f->pipe_cli_server,0666);
         pipeToCliente=open(f->pipe_server_cli,O_RDONLY);
-        strcpy(destino_pipe,getDest());
-        strcat(destino_pipe,"file.gz");
         strcpy(destino_metadata,getDestMeta());
         strcat(destino_metadata,f->nome);
+        strcpy(destino_pipe,getDestData());
+        readlink(destino_metadata,buffer,BUFF);
+        strcat(destino_pipe,buffer);
 
+        printf("stuffdf %s %s\n",destino_pipe,destino_metadata );
 
         if (!fork()) {
             
-            execlp("cp","cp" ,destino_metadata,destino_pipe, NULL);
+            execlp("cp","cp" ,"/home/wani/.Backup/data/da39a3ee5e6b4b0d3255bfef95601890afd80709","/home/wani/.Backup/data/file.gz", NULL);
             perror("Erro ao tentar calcular hash");
             _exit(1);
         }   
@@ -49,16 +51,16 @@ void restore(Fich f){
 
         if (!fork()) {
             
-            execlp("gunzip","gunzip" , destino_pipe, NULL);
+            execlp("gunzip","gunzip" ,"/home/wani/.Backup/data/file.gz", NULL);
             perror("Erro ao tentar calcular hash");
             _exit(1);
         }   
         wait(NULL);
 
         strcpy(destino_pipe,getDest());
-        strcpy(destino_pipe,"file");
+        strcat(destino_pipe,"file");
 
-        file=open(destino_pipe,O_RDONLY);
+        file=open("/home/wani/.Backup/data/file",O_RDONLY);
 
         kill(f->pid, SIGUSR1);
         rd=1;wr=1;
@@ -80,7 +82,7 @@ void restore(Fich f){
 }
 
 void backup(Fich f){
-    int  rd,wr,pipeFromCliente,file;
+    int  rd,wr,pipeFromCliente,file; 
     char destino_pipe[BUFF];
     char destino_data[BUFF];
     char buffer[BUFF];
@@ -91,48 +93,42 @@ void backup(Fich f){
         mkfifo(f->pipe_cli_server,0666);
         kill(f->pid, SIGUSR1);
         pipeFromCliente=open(f->pipe_cli_server,O_RDONLY);
-        strcpy(destino_pipe,getDest());
+        strcpy(destino_pipe,getDestData());
         rd=1;wr=1;
         
-
         /*Backup*/
-        file=open(strcat(destino_pipe,f->nome), O_CREAT | O_WRONLY | O_RDONLY, 0666 );
+        file=open(strcat(destino_pipe,f->nome),O_CREAT | O_RDWR , 0600 );
         while(rd && wr){
             rd=read(pipeFromCliente,buffer,BUFF);
+            wr=write(file,buffer,rd);
             if(strcmp(buffer,"acabou_o_ficheiro_volte_sempre\0")){rd=0; wr=0;}
-            else wr=write(file,buffer,rd);
             
         }
 
-
-        if (!fork()) {
-            
-            execlp("gzip","gzip" , destino_pipe, NULL);
-            perror("Erro ao tentar calcular hash");
-            _exit(1);
-        }   
-        wait(NULL);
         
-        strcpy(destino_data,getDestData());
-        strcat(destino_data,f->sha1sum);
+            if (!fork()) {
+                
+                execlp("gzip","gzip" , destino_pipe, NULL);
+                perror("Erro ao tentar calcular hash");
+                _exit(1);
+            }   
+            wait(NULL);
+            strcpy(destino_data,getDestData());
+            strcat(destino_data,f->sha1sum);
+            if (!fork()) {
+                strcat(destino_pipe,".gz");
+                execlp("mv", "mv",destino_pipe,destino_data , NULL);
+                perror("Erro ao tentar calcular hash");
+                _exit(1);
+            } 
+            wait(NULL);
             
-        if (!fork()) {
-            strcat(destino_pipe,".gz");
-            execlp("mv", "mv",destino_pipe,destino_data , NULL);
-            perror("Erro ao tentar calcular hash");
-            _exit(1);
-        }   
-        wait(NULL);
+            strcpy(destino_metadata,getDestMeta());
+            strcat(destino_metadata,f->nome);
+            symlink(destino_data,destino_metadata);                    
+
         
-
-
-        strcpy(destino_metadata,getDestMeta());
-        strcat(destino_metadata,f->nome);
-        symlink(destino_data,destino_metadata);                    
-
-
-        unlink(destino_pipe);
-
+       
         close(file);
         kill(f->pid,SIGUSR1);
 
