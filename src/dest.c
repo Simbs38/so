@@ -10,30 +10,33 @@
 #include <sys/stat.h>
 #include <signal.h>
 
-
+#define BUFF 256
 
 char *getDest(){
-    char *source=getenv("HOME");
-    strcat(source,"/.Backup");
-
+    char *source=malloc(sizeof BUFF);
+    strcpy(source,(getenv("HOME")));
+    strcat(source,"/.Backup/");
     return source;
 
 }
 
 char *getDestMeta(){
-    char *source=getDest();
-    strcat(source,"/metadata");
+    char *source=malloc(sizeof BUFF);
+    strcpy(source,getDest());
+    strcat(source,"metadata/");
     return source;
 }
 
 char *getDestData(){
-    char *source=getDest();
-    strcat(source,"/data");
+    char *source=malloc(sizeof BUFF);
+    strcpy(source,getDest());
+    strcat(source,"data/");
     return source;
 }
 
 char *getDestPipe(){
-    char*source=getDest();
-    strcat(source,"/so_pipe");
+    char *source=malloc(sizeof BUFF);
+    strcpy(source,getDest());
+    strcat(source,"so_pipe");
     return source;
 }

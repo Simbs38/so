@@ -13,13 +13,26 @@
 
 typedef struct ficheiro{
     int pid;
-    char path[BUFF];
     char operacao[BUFF];
     char nome[BUFF];
     char sha1sum[BUFF];
     char pipe_server_cli[BUFF];
     char pipe_cli_server[BUFF];
 }*Fich;
+
+void help(){
+    printf("\n");
+    printf(" -----------------------------------------\n");
+    printf(" | Bemvindo ao menu de ajuda do programa |\n");
+    printf(" -----------------------------------------\n");
+    printf(" | Carregar Ficheiros                    |\n");
+    printf(" | sobucli backup <nome_ficheiro>        |\n");
+    printf(" | ------------------------------------- |\n");
+    printf(" | Restaurar Ficheiros                   |\n");
+    printf(" | sobucli restore <nome_ficheiro>       |\n");
+    printf(" | ------------------------------------- |\n");
+    printf("\n");
+}
 
 void continua(){
     printf("Pipes criados, podes continuar\n");
@@ -30,132 +43,138 @@ void backup_done(){
 }
 
 
-char *getsha1sum(char *file){
-    int pfd[2];
-    char  *ret=malloc (sizeof BUFF);
-    pipe(pfd);
-    if(!fork()){
-        close(pfd[0]);
-        dup2(pfd[1],1);
-        execlp("sha1sum","sha1sum",file,NULL);
-        perror("erro");
-        _exit(1);
-    }
-    close(pfd[1]);
-    dup2(pfd[0],0);
-    read(pfd[0],ret,BUFF);
-    return ret;
+char* getsha1sum(char *file) {
+    char sha[BUFF], *key, *r = NULL;
+    int p[2], status;
 
-
-}
-
-char* generate_hash(char *file_path) {
-    char sha1sum[BUFF], *hash, *ret = NULL;
-    int pp[2], status;
-
-    pipe(pp);
+    pipe(p);
     if (!fork()) {
-        close(pp[0]);
-        dup2(pp[1], 1);
+        close(p[0]);
+        dup2(p[1], 1);
 
-        execlp("sha1sum", "sha1sum", file_path, NULL);
-        close(pp[1]);
+        execlp("sha1sum", "sha1sum", file, NULL);
+        close(p[1]);
         perror("Erro ao tentar calcular hash");
         _exit(1);
     }
 
     wait(&status);
     status = WEXITSTATUS(status);
-    if (status != 0) return ret;
+    if (status == 0){
 
-    close(pp[1]);
-    read(pp[0], sha1sum, BUFF);
-    close(pp[0]);
+    close(p[1]);
+    read(p[0], sha, BUFF);
+    close(p[0]);
 
-    hash = strtok(sha1sum, " ");
+    key = strtok(sha, " ");
 
-    ret = malloc(strlen(hash) + 1);
-    strcpy(ret, hash);
-    return ret;
-}
-
-
-char *change_name(char *file){
-    char buffer[BUFF];
-
-    char *parte=strtok(file,"\\");
-    strcpy(buffer,parte);
-
+    r = malloc(strlen(key) + 1);
+    strcpy(r, key);
+    }
+    return r;
 }
 
 
 
-
-Fich getFicheiro(char* argv[],int i){
-    char buf[BUFF];
-    char *operacao =malloc (sizeof BUFF);
-    char *nome =malloc (sizeof BUFF);
+Fich getFicheiroRst(char* argv[],int i){
     Fich f=(Fich) malloc (sizeof(struct ficheiro));
     f->pid=getpid();
-    strcpy(operacao,argv[1]);
-    strcpy(nome,argv[i]);
-    strcpy(f->operacao,operacao);
-    strcpy(f->sha1sum,generate_hash(argv[i]));
-    strcpy(f->nome,nome);
-    sprintf(f->pipe_server_cli,"%spipe_server_cli_%d","/home/wani/.Backup/",getpid());
-    sprintf(f->pipe_cli_server,"%spipe_cli_server_%d","/home/wani/.Backup/",getpid());
-    strcpy(f->path,change_name(realpath(f->nome, buf)));
+    strcpy(f->operacao,argv[1]);
+    strcpy(f->nome,argv[i]);
+    sprintf(f->pipe_server_cli,"%spipe_server_cli_%d",getDest(),getpid());
     return f;
+}
+
+
+
+
+Fich getFicheiroBck(char* argv[],int i){
+    Fich f=(Fich) malloc (sizeof(struct ficheiro));
+    f->pid=getpid();
+    strcpy(f->operacao,argv[1]);
+    strcpy(f->sha1sum,getsha1sum(argv[i]));
+    strcpy(f->nome,argv[i]);
+    sprintf(f->pipe_cli_server,"%spipe_cli_server_%d",getDest(),getpid());
+    return f;
+}
+
+
+void backup(int argc, char *argv[],Fich f,int p){
+    int i,pipeToServidor,file,rd,wr;
+    char destino_pipe[BUFF];
+    char buffer[BUFF];
+    strcpy(destino_pipe,getDestPipe());
+
+    for(i=2;i!=argc;i++){
+    f=getFicheiroBck(argv,i);
+    write(p,f, sizeof(struct ficheiro));
+    
+    signal(SIGUSR1, continua);
+    pause();
+    pipeToServidor=open(f->pipe_cli_server,O_WRONLY);
+    file=open(f->nome,O_RDONLY);
+    rd=1; wr=1;
+    while(rd && wr){
+        rd=read(file,buffer,BUFF);
+        if(!rd) wr=write(pipeToServidor,"acabou_o_ficheiro_volte_sempre\0",31);
+        else{wr=write(pipeToServidor,buffer,rd);}
+    }
+    signal(SIGUSR1,backup_done);
+    pause();
+    printf("%s: copiado\n",f->nome );
+    close(pipeToServidor);
+    close(file);
+
+    }
+}
+
+void restore(int argc, char *argv[],Fich f,int p){
+    int i,pipeFromServidor,file,rd,wr;
+    char destino_pipe[BUFF];
+    char buffer[BUFF];
+    strcpy(destino_pipe,getDestPipe());
+    
+    for(i=2;i!=argc;i++){
+        f=getFicheiroRst(argv,i);
+        write(p,f,sizeof(struct ficheiro));
+
+        signal(SIGUSR1, continua);
+        pause();
+
+        pipeFromServidor=open(f->pipe_server_cli,O_RDONLY);
+        file=open(f->nome,O_WRONLY | O_RDONLY | O_CREAT, 0666);
+        rd=1;wr=1;
+        while(rd && wr){
+            rd=read(pipeFromServidor,buffer,BUFF);
+            if(strcmp(buffer,"acabou_o_ficheiro_volte_sempre\0")){rd=0; wr=0;}
+            else wr=write(file,buffer,BUFF);
+        }
+
+        printf("%s: restaurado\n",f->nome );
+
+    }
 
 }
 
 
 int main(int argc, char *argv[]){
-	int p,i,pipeToServidor,pipeFromServidor,file,rd,wr;
-    char destino_pipe[BUFF];
-    char buffer[BUFF];
-    strcpy(destino_pipe,getDestPipe());
+    int p;
     Fich f=malloc(sizeof (struct ficheiro));
-	p = open("/home/wani/.Backup/so_pipe", O_WRONLY);
+	p = open(getDestPipe(), O_WRONLY);
     
     if(argc==1){
         printf("Por favor introduza uma opção\n");
     }
     else if(argc==2){
+        if(strcmp(argv[1],"-h") || strcmp(argv[1],"-help"))help();
+        else{
         printf("Por favor introduza um ficheiro\n");
+        }
     }
     else{
-        if(argv[1][0]=='b'){
-            for(i=2;i!=argc;i++){
-            f=getFicheiro(argv,i);
-            write(p,f, sizeof(struct ficheiro));
-            
+        if(argv[1][0]=='b') backup(argc,argv,f,p);
+        else if(argv[1][0]=='r') restore(argc,argv,f,p);
 
-            signal(SIGUSR1, continua);
-            pause();
-
-            pipeToServidor=open(f->pipe_cli_server,O_WRONLY);
-            pipeFromServidor=open(f->pipe_server_cli,O_RDONLY);
-            file=open(f->nome,O_RDONLY);
-
-
-            while(rd && wr){
-                rd=read(file,buffer,BUFF);
-                wr=write(pipeToServidor,buffer,rd);
-            }
-
-            signal(SIGUSR1,backup_done);
-            pause();
-            printf("Ficheiro: %s copiado!\n",f->nome );
-            close(pipeToServidor);
-            close(pipeFromServidor);
-            close(file);
-
-            }
-
-
-
-        }
     }
         
             
