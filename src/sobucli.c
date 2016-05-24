@@ -9,17 +9,6 @@
 #include <signal.h>
 
 
-#define BUFF 1024
-
-typedef struct ficheiro{
-    int pid;
-    char operacao[BUFF];
-    char nome[BUFF];
-    char sha1sum[BUFF];
-    char pipe_server_cli[BUFF];
-    char pipe_cli_server[BUFF];
-}*Fich;
-
 void help(){
     printf("\n");
     printf(" -----------------------------------------\n");
@@ -34,13 +23,7 @@ void help(){
     printf("\n");
 }
 
-void continua(){
-    printf("Pipes criados, podes continuar\n");
-}
-
-void backup_done(){
-    printf("Backup feito, podes continuar\n");
-}
+void continua(){}
 
 
 char* getsha1sum(char *file) {
@@ -76,53 +59,55 @@ char* getsha1sum(char *file) {
 
 
 
-Fich getFicheiroRst(char* argv[],int i){
-    Fich f=(Fich) malloc (sizeof(struct ficheiro));
-    f->pid=getpid();
-    strcpy(f->operacao,argv[1]);
-    strcpy(f->nome,argv[i]);
-    sprintf(f->pipe_server_cli,"%spipe_server_cli_%d",getDest(),getpid());
-    return f;
-}
 
-
-
-
-Fich getFicheiroBck(char* argv[],int i){
+Fich getFicheiroBack(char* argv[],int i){
     Fich f=(Fich) malloc (sizeof(struct ficheiro));
     f->pid=getpid();
     strcpy(f->operacao,argv[1]);
     strcpy(f->sha1sum,getsha1sum(argv[i]));
     strcpy(f->nome,argv[i]);
-    sprintf(f->pipe_cli_server,"%spipe_cli_server_%d",getDest(),getpid());
+    sprintf(f->pipe,"%spipe_%d",getDest(),getpid());
     return f;
 }
+
+Fich getFicheiroRest(char* argv[],int i){
+    Fich f=(Fich) malloc (sizeof(struct ficheiro));
+    f->pid=getpid();
+    strcpy(f->operacao,argv[1]);
+    strcpy(f->nome,argv[i]);
+    sprintf(f->pipe,"%spipe_%d",getDest(),getpid());
+    return f;
+}
+
 
 
 void backup(int argc, char *argv[],Fich f,int p){
     int i,pipeToServidor,file,rd,wr;
     char destino_pipe[BUFF];
-    char buffer[BUFF];
     strcpy(destino_pipe,getDestPipe());
 
     for(i=2;i!=argc;i++){
-    f=getFicheiroBck(argv,i);
+    f=getFicheiroBack(argv,i);
     write(p,f, sizeof(struct ficheiro));
     
     signal(SIGUSR1, continua);
     pause();
 
-    pipeToServidor=open(f->pipe_cli_server,O_WRONLY);
+    pipeToServidor=open(f->pipe,O_WRONLY);
     file=open(f->nome,O_RDONLY);
     rd=1; wr=1;
 
-    while(rd && wr){
-        rd=read(file,buffer,BUFF);
-            if(!rd) wr=write(pipeToServidor,"acabou_o_ficheiro_volte_sempre\0",31);
-            else{wr=write(pipeToServidor,buffer,rd);}
-            }
+
+    Lido estrutura=(Lido) malloc (sizeof(struct lido));
+    estrutura->fim=1;    
+    do{
+        estrutura->rd=read(file,estrutura->buffer,BUFF);
+        if(!estrutura->rd){ estrutura->fim=0;rd=0; wr=0;}
+        wr=write(pipeToServidor,estrutura,(sizeof(struct lido)));
+    }while(rd && wr);
+    
     }
-    signal(SIGUSR1,backup_done);
+    signal(SIGUSR1,continua);
     pause();
     printf("%s: copiado\n",f->nome );
     close(pipeToServidor);
@@ -133,26 +118,26 @@ void backup(int argc, char *argv[],Fich f,int p){
 void restore(int argc, char *argv[],Fich f,int p){
     int i,pipeFromServidor,file,rd,wr;
     char destino_pipe[BUFF];
-    char buffer[BUFF];
     strcpy(destino_pipe,getDestPipe());
     
     for(i=2;i!=argc;i++){
-        f=getFicheiroRst(argv,i);
+        f=getFicheiroRest(argv,i);
         write(p,f,sizeof(struct ficheiro));
 
         signal(SIGUSR1, continua);
         pause();
-        printf("Pipe: %s\n",f->pipe_server_cli );
-        pipeFromServidor=open(f->pipe_server_cli,O_RDONLY);
-        file=open("d.txt",O_WRONLY | O_RDONLY | O_CREAT, 0666);
+        pipeFromServidor=open(f->pipe,O_RDONLY);
+        file=open(f->nome,O_WRONLY | O_CREAT, 0666);
         rd=1;wr=1;
+        Lido estrutura=(Lido) malloc (sizeof(struct lido));
         while(rd && wr){
-            rd=read(pipeFromServidor,buffer,BUFF);
-            if(strcmp(buffer,"acabou_o_ficheiro_volte_sempre\0")){rd=0; wr=0;}
-            else wr=write(file,buffer,BUFF);
+            rd=read(pipeFromServidor,estrutura,(sizeof(struct lido)));
+            if(estrutura->fim) wr=write(file,estrutura->buffer,estrutura->rd);
+            else{rd=0; wr=0;}
+            
         }
-
-        printf("%s: restaurado\n","d.txt" );
+        close(file);
+        printf("%s: restaurado\n",f->nome );
 
     }
 
